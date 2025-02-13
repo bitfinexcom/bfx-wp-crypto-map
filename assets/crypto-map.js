@@ -39,25 +39,37 @@ function BfxCryptoMap(configuration) {
   const {
     isMobile,
     assetUrl,
+    themeAssetUrl,
     mapboxKey,
     mapboxUsername,
     merchantDataUrl,
     containerId = 'bfx-crypto-map',
     translations,
+    region,
+    theme,
+    defaultLat,
+    defaultLng,
+    defaultZoomLevel,
   } = configuration;
 
   this.mapboxUsername = mapboxUsername
   this.isMobile = isMobile;
   this.assetUrl = assetUrl;
+  this.themeAssetUrl = themeAssetUrl;
   this.mapboxKey = mapboxKey;
   this.merchantDataUrl = merchantDataUrl;
   this.containerId = containerId;
   this.translations = translations;
+  this.region = region;
+  this.theme = theme;
+  this.defaultLat = defaultLat ? parseFloat(defaultLat) : 46.005314;
+  this.defaultLng = defaultLng ? parseFloat(defaultLng) : 8.953802;
+  this.defaultZoomLevel = defaultZoomLevel ? parseInt(defaultZoomLevel) : 17;
 
   this.currentPin = null;
   this.needRelocate = false;
   this.MERCHANT_DATA = [];
-  this.logoPlaceholder = assetUrl + '/placeholder.png';
+  this.logoPlaceholder = themeAssetUrl + '/placeholder.png';
   this.tokenMap = {
     BTC: {
       name: 'BTC Lightning',
@@ -81,7 +93,7 @@ function BfxCryptoMap(configuration) {
       name: 'NAKA Card',
       width: 22,
       height: 22,
-      icon: assetUrl + '/NAKA.svg',
+      icon: assetUrl + '/NAKA_CARD.svg',
     },
   };
 
@@ -100,7 +112,7 @@ BfxCryptoMap.prototype.setup = function() {
       maxZoom: 19,
       minZoom: 5,
     })
-    .setView([46.005314, 8.953802], 17);
+    .setView([self.defaultLat, self.defaultLng], self.defaultZoomLevel);
 
   map.attributionControl.setPrefix('© <a href="https://www.mapbox.com/feedback/">Mapbox</a> © <a href="https://leafletjs.com" title="A JavaScript library for interactive maps">Leaflet</a>');
 
@@ -128,7 +140,7 @@ BfxCryptoMap.prototype.setup = function() {
   });
 
   const currentPinIcon = L.icon({
-    iconUrl: this.assetUrl + '/current-pin.png',
+    iconUrl: this.themeAssetUrl + '/current-pin.png',
     iconSize: [32, 32],
     iconAnchor: [16, 16],
   });
@@ -157,7 +169,7 @@ BfxCryptoMap.prototype.setup = function() {
         },
       );
 
-      img.src = self.assetUrl + '/location.png';
+      img.src = self.themeAssetUrl + '/location.png';
       img.style.width = '18px';
       img.style.height = '18px';
 
@@ -308,7 +320,11 @@ BfxCryptoMap.prototype.renderMarkers = function(data) {
 BfxCryptoMap.prototype.fetchData = function() {
   const self = this;
   jQuery
-    .ajax({ method: 'POST', url: this.merchantDataUrl })
+    .ajax({
+      method: 'POST',
+      url: this.merchantDataUrl,
+      data: { region: self.region }
+    })
     .done(function(data) {
       const items = data.items;
 
@@ -350,15 +366,15 @@ BfxCryptoMap.prototype.onMarkerClick = function(e) {
     const cityDesc = '<p>' + merchant.city + ', ' + BfxCryptoMap.utils.displayCountry(merchant.country) + '</p>';
     const description = phoneDesc + addressDesc + cityDesc;
     const website = merchant.website
-      ? '<a href="' + merchant.website + '" target="_blank"><img src="' + self.assetUrl + '/globe.svg" height="24" /></a>'
+      ? '<a href="' + merchant.website + '" target="_blank"><img src="' + self.themeAssetUrl + '/globe.svg" height="24" /></a>'
       : '';
 
     const phone = self.isMobile && merchant.phone
-      ? '<a href="tel:' + merchant.phone  + '"><img src="' + self.assetUrl + '/phone.svg" height="24" /></a>'
+      ? '<a href="tel:' + merchant.phone  + '"><img src="' + self.themeAssetUrl + '/phone.svg" height="24" /></a>'
       : ''
 
     const latLng = merchant.lat + ',' + merchant.lng;
-    const direction = '<a href="https://maps.google.com/?q=' + latLng +'" target="_blank"><img src="' + self.assetUrl + '/direction.svg" height="24" /></a>';
+    const direction = '<a href="https://maps.google.com/?q=' + latLng +'" target="_blank"><img src="' + self.themeAssetUrl + '/direction.svg" height="24" /></a>';
     const websiteInner = phone + website + direction;
 
     const popupTemplate = document.getElementById('bfx-crypto-popup-template');

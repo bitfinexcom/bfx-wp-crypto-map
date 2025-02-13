@@ -3,7 +3,7 @@
 Plugin Name: BFX crypto map
 Plugin URI: https://bitfinex.com
 description: BFX crypto map
-Version: 1.4.16
+Version: 1.5.4
 Author: BFX
 Author URI: https://bitfinex.com
 License: GPL2
@@ -60,6 +60,17 @@ function bfx_gen_tag_filter_list($translator) {
   return $tag_filter_html;
 }
 
+function bfx_ccy_name($ccy) {
+  $names = [
+    'BTC' => 'BTC Lightning',
+    'UST' => 'USDt',
+    'LVGA' => 'LVGA',
+    'NAKA_CARD' => 'NAKA Card',
+  ];
+
+  return $names[$ccy];
+}
+
 function bfx_gen_tag_filter_item($tag, $translator) {
   $label = $translator->translate($tag);
   return <<<HTML
@@ -68,6 +79,34 @@ function bfx_gen_tag_filter_item($tag, $translator) {
       <label for="bfx_filter_$tag">$label</label>
     </div>
   HTML;
+}
+
+function bfx_get_ccy_list($str) {
+  if (!$str) {
+    return [];
+  }
+
+  return explode(',', $str);
+}
+
+function bfx_gen_filter_checkbox_item($ccy, $asset_url) {
+  $name = bfx_ccy_name($ccy);
+  return <<<HTML
+    <div class="filter-checkbox">
+      <input type="checkbox" id="bfx_filter_$ccy" name="accepted_cryptos" value="$ccy" />
+      <label for="bfx_filter_$ccy">
+        <img src="$asset_url/$ccy.svg" width="25" height="22" />
+        $name
+      </label>
+    </div>
+  HTML;
+}
+
+function bfx_gen_filter_checkbox_list($arr, $asset_url) {
+  $list_item = array_map(function($item) use ($asset_url) {
+    return bfx_gen_filter_checkbox_item($item, $asset_url);
+  }, $arr);
+  return join(' ', $list_item);
 }
 
 // [bfx_crypto_map width="100%" height="100%" mode="desktop"]
@@ -79,7 +118,15 @@ function bfx_crypto_map_handler( $atts ) {
     'mobile_width' => '100%',
     'mobile_height' => 'calc(100vh - 100px)',
     'lang' => 'en',
-    'env' => 'production'
+    'env' => 'production',
+    'ccy_list' => 'BTC,UST,LVGA,NAKA_CARD',
+    'region' => '',
+    'theme' => 'default',
+    'default_lat' => '',
+    'default_lng' => '',
+    'mapbox_key' => 'pk.eyJ1IjoicGxhbmJtYXAiLCJhIjoiY2xvNGd2ZnJqMDF2ZTJsbzJua3dyNzJ2YSJ9.tbgNNQ5wehycZSJyeSRCuA',
+    'mapbox_username' => 'planbmap',
+    'default_zoom_level' => '17'
   ), $atts);
 
   $map_w = $mapped_atts['width'];
@@ -88,19 +135,29 @@ function bfx_crypto_map_handler( $atts ) {
   $env = $mapped_atts['env'];
   $map_mobile_w = $mapped_atts['mobile_width'];
   $map_mobile_h = $mapped_atts['mobile_height'];
+  $ccy_list = bfx_get_ccy_list($mapped_atts['ccy_list']);
+  $map_region = $mapped_atts['region'];
+  $theme = $mapped_atts['theme'];
+  $default_lat = $mapped_atts['default_lat'];
+  $default_lng = $mapped_atts['default_lng'];
+  $mapbox_key = $mapped_atts['mapbox_key'];
+  $mapbox_username = $mapped_atts['mapbox_username'];
+  $default_zoom_level = $mapped_atts['default_zoom_level'];
   $merchants_data_url = '/wp-json/bfx-crypto-map/v1/merchants?env=' . $env;
   $asset_url = plugin_dir_url(__FILE__) . 'assets';
+  $theme_asset_url = $theme === 'default' ? $asset_url : $asset_url . '/blue_theme';
 
   $translator = new BfxTranslations($lang);
   $tag_filter_html = bfx_gen_tag_filter_list($translator);
+  $filter_checkbox_list_html = bfx_gen_filter_checkbox_list($ccy_list, $asset_url);
 
   $html = <<<HTML
-  <div class="bfx-crypto-container">
+  <div class="bfx-crypto-container bfx-crypto-theme-$theme">
     <div class="bfx-crypto-filter-container">
       <div class="bfx-crypto-filter bfx-crypto-filter-left">
         <div class="bfx-crypto-filter-store-list bfx-crypto-filter-box">
           <button type="button" class="filter-btn" id="bfx-crypto-store-list-btn">
-            <img src="$asset_url/list-icon.png" />
+            <img src="$theme_asset_url/list-icon.png" />
             <span>{$translator->translate('store_list')}</span>
             <div class="arrow">
               <img src="$asset_url/arrow-down.png" />
@@ -113,11 +170,11 @@ function bfx_crypto_map_handler( $atts ) {
             <input id="bfx-crypto-search-input" type="search" placeholder="{$translator->translate('search')}" />
           </div>
           <button type="button" class="filter-btn" id="bfx-crypto-store-list-mobile-btn">
-            <img src="$asset_url/list-icon.png" />
+            <img src="$theme_asset_url/list-icon.png" />
           </button>
           <button type="button" class="filter-btn" id="bfx-crypto-filter-btn">
             <div class="filter-icon-wrapper">
-              <img src="$asset_url/filter.png" />
+              <img src="$theme_asset_url/filter.png" />
               <div id="filter-number"></div>
             </div>
             <span>{$translator->translate('filter_by')}</span>
@@ -127,14 +184,14 @@ function bfx_crypto_map_handler( $atts ) {
           </button>
           <button type="button" class="filter-btn" id="bfx-crypto-layer-select-mobile-btn">
             <div class="filter-icon-wrapper">
-              <img src="$asset_url/layer.png" />
+              <img src="$theme_asset_url/layer.png" />
             </div>
           </button>
         </div>
         <div class="bfx-crypto-filter-clear-all bfx-crypto-filter-box hidden">
           <button type="button" class="filter-btn" id="bfx-crypto-clear-filter-btn">
             <div class="filter-icon-wrapper">
-              <img src="$asset_url/delete.png" />
+              <img src="$theme_asset_url/delete.png" />
             </div>
             <span>{$translator->translate('clear_filters')}</span>
           </button>
@@ -144,7 +201,7 @@ function bfx_crypto_map_handler( $atts ) {
         <div class="bfx-crypto-filter-layer-select bfx-crypto-filter-box">
           <button type="button" class="filter-btn" id="bfx-crypto-layer-select-btn">
             <div class="filter-icon-wrapper">
-              <img src="$asset_url/layer.png" />
+              <img src="$theme_asset_url/layer.png" />
             </div>
           </button>
         </div>
@@ -175,34 +232,7 @@ function bfx_crypto_map_handler( $atts ) {
             <div class="filter-list">
               <div class="filter-title">{$translator->translate('accepts')}</div>
               <div class="filter-content">
-                <div class="filter-checkbox">
-                  <input type="checkbox" id="bfx_filter_BTC" name="accepted_cryptos" value="BTC" />
-                  <label for="bfx_filter_BTC">
-                    <img src="$asset_url/BTC.svg" width="25" height="22" />
-                    BTC Lightning
-                  </label>
-                </div>
-                <div class="filter-checkbox">
-                  <input type="checkbox" id="bfx_filter_UST" name="accepted_cryptos" value="UST" />
-                  <label for="bfx_filter_UST">
-                    <img src="$asset_url/UST.svg" width="22" height="22" />
-                    USDt
-                  </label>
-                </div>
-                <div class="filter-checkbox">
-                  <input type="checkbox" id="bfx_filter_LVGA" name="accepted_cryptos" value="LVGA" />
-                  <label for="bfx_filter_LVGA">
-                    <img src="$asset_url/LVGA.svg" width="22" height="22" />
-                    LVGA
-                  </label>
-                </div>
-                <div class="filter-checkbox">
-                  <input type="checkbox" id="bfx_filter_NAKA" name="accepted_cryptos" value="NAKA_CARD" />
-                  <label for="bfx_filter_NAKA">
-                    <img src="$asset_url/NAKA.svg" width="22" height="22" />
-                    NAKA Card
-                  </label>
-                </div>
+                $filter_checkbox_list_html
               </div>
             </div>
           </form>
@@ -256,18 +286,24 @@ function bfx_crypto_map_handler( $atts ) {
   <script>
     jQuery(function() {
       const isMobile = document.body.clientWidth < 768;
-      const mapboxKey = 'pk.eyJ1IjoicGxhbmJtYXAiLCJhIjoiY2xvNGd2ZnJqMDF2ZTJsbzJua3dyNzJ2YSJ9.tbgNNQ5wehycZSJyeSRCuA';
-      const mapboxUsername = 'planbmap'
+      const mapboxKey = '$mapbox_key';
+      const mapboxUsername = '$mapbox_username'
 
       const bfxCryptoMap = new BfxCryptoMap({
         isMobile: isMobile,
         assetUrl: '$asset_url',
+        themeAssetUrl: '$theme_asset_url',
         mapboxKey: mapboxKey,
         mapboxUsername: mapboxUsername,
         merchantDataUrl: '$merchants_data_url',
         translations: {
           no_store: "{$translator->translate('no_store')}",
-        }
+        },
+        theme: '$theme',
+        region: '$map_region',
+        defaultLat: '$default_lat',
+        defaultLng: '$default_lng',
+        defaultZoomLevel: '$default_zoom_level',
       });
 
       bfxCryptoMap.setup();
